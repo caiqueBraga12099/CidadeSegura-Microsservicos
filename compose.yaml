@@ -1,0 +1,91 @@
+services:
+  mysql-ocorrencias:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ocorrencias
+      MYSQL_USER: cidadesegura
+      MYSQL_PASSWORD: cidadesegura_local
+      MYSQL_ROOT_PASSWORD: root_local
+    ports:
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - ocorrencias-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -proot_local --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  mysql-atendimentos:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: atendimentos
+      MYSQL_USER: cidadesegura
+      MYSQL_PASSWORD: cidadesegura_local
+      MYSQL_ROOT_PASSWORD: root_local
+    ports:
+      - "127.0.0.1:3308:3306"
+    volumes:
+      - atendimentos-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -proot_local --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  eureka-server:
+    build:
+      context: .
+      args:
+        MODULE: eureka-server
+    ports:
+      - "8761:8761"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8761/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+  ms-ocorrencias:
+    build:
+      context: .
+      args:
+        MODULE: ms-ocorrencias
+    environment:
+      EUREKA_URL: http://eureka-server:8761/eureka/
+      DB_URL: jdbc:mysql://mysql-ocorrencias:3306/ocorrencias?serverTimezone=UTC
+      DB_USER: cidadesegura
+      DB_PASSWORD: cidadesegura_local
+    depends_on:
+      mysql-ocorrencias:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+  ms-atendimentos:
+    build:
+      context: .
+      args:
+        MODULE: ms-atendimentos
+    environment:
+      EUREKA_URL: http://eureka-server:8761/eureka/
+      DB_URL: jdbc:mysql://mysql-atendimentos:3306/atendimentos?serverTimezone=UTC
+      DB_USER: cidadesegura
+      DB_PASSWORD: cidadesegura_local
+    depends_on:
+      mysql-atendimentos:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+  api-gateway:
+    build:
+      context: .
+      args:
+        MODULE: api-gateway
+    environment:
+      EUREKA_URL: http://eureka-server:8761/eureka/
+    ports:
+      - "8082:8082"
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+volumes:
+  ocorrencias-data:
+  atendimentos-data:
